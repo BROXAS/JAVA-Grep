@@ -1,0 +1,233 @@
+/** NOTE MUST COMMENT OUT "package grepProg;" when working with command line **/
+/**
+ * Executing with command line javac grep.java
+ * java grep 'pattern' 'file name'
+**/
+
+
+package grepProg;
+
+
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.InputStreamReader;
+import java.io.LineNumberReader;
+import java.io.FileReader;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+import java.text.DecimalFormat;
+
+public class grep implements Runnable {
+    
+    //Necessary data
+    Pattern multThredPattern;
+    String file;
+    int endPt;
+    int startPt;
+    
+    //Constructor
+    public grep(int startPt, int endPt, Pattern multThredPattern, String file){
+        
+        this.multThredPattern = multThredPattern;
+        this.file = file;
+        this.endPt = endPt;
+        this.startPt = startPt;
+    }
+    
+    //Runnable
+    public void run() {
+        
+        FileReader fileRdr = null;
+        LineNumberReader lineNum = null;
+        String temp;
+        
+        try {
+            fileRdr = new FileReader(file);
+            lineNum = new LineNumberReader(fileRdr);
+            
+            while (lineNum.getLineNumber() != startPt){
+                lineNum.readLine();
+            }
+            
+            while (lineNum.getLineNumber() < endPt){
+                Matcher m = null;
+                if ((temp = lineNum.readLine()) != null) {
+                    m = multThredPattern.matcher(temp);
+                }
+                if (m == null) {
+                    break;
+                }
+                if (m.find()) {
+                    System.out.println(lineNum.getLineNumber() + ": " + temp);
+                }
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        
+    }
+    
+    public static void grepMethod(String[] s) {
+        
+        Pattern p = null;
+        String temp;
+        int lineCount;
+        
+        //Find the pattern we want to match
+        try {
+            p = Pattern.compile(s[0]);
+        }
+        catch (PatternSyntaxException e) {
+            System.err.println("Invalid RE syntax: " + e.getDescription());
+            System.exit(1);
+        }
+        
+        
+        for (int i = 1; i < s.length; i++) {
+            //reset lineCount
+            lineCount = 0;
+            BufferedReader reader = null;
+            try {    //Reading the file
+                reader = new BufferedReader(new InputStreamReader(new FileInputStream(s[i])));
+            }
+            catch (FileNotFoundException e) {        //Error
+                System.err.println("Error opening file.  " + e.getMessage());
+                System.exit(1);
+            }
+            
+            try {    //Loop to match pattern found on specific lines, and prints out the line
+                while ((temp = reader.readLine()) != null) {
+                    lineCount++;
+                    Matcher match = p.matcher(temp);
+                    if (match.find()) {
+                        System.out.println(lineCount + ": " + temp);
+                    }
+                }
+            }
+            catch (Exception e) {    //Error check
+                System.out.println("Error when trying to read line.  " + e.getMessage());
+                System.exit(1);
+            }
+            
+        }
+        
+    }
+    
+    public static void multThredGrep(String[] s) {
+        //Basically, similar concept as the regular grep method, however we are now using multiple threds
+        
+        int lineCount = 0;
+        Pattern p = null;
+        
+        try {
+            p = Pattern.compile(s[0]);
+        }
+        catch (PatternSyntaxException e) {
+            System.err.println("Invalid RE syntax: " + e.getDescription());
+            System.exit(1);
+        }
+        
+        for (int i = 1; i < s.length; i++){
+            BufferedReader reader = null;
+            try {
+                reader = new BufferedReader(new InputStreamReader(
+                                                                  new FileInputStream(s[i])));
+                
+            }
+            catch (FileNotFoundException e) {
+                System.err.println("Error opening file.  " + e.getMessage());
+                System.exit(1);
+            }
+            try {
+                while ((reader.readLine()) != null) {
+                    lineCount++;
+                }
+            }
+            catch (Exception e) {
+                System.out.println("error reading lines");
+            }
+            
+            multThredGrepRun(s[i], lineCount, p);
+            
+        }
+    }
+    
+    //Basically similar concept as the normal runnable method, however we are now adjusting it to handle multiple threds
+    public static void multThredGrepRun(String fileName, int lineCount, Pattern p){
+        
+        int midpoint;
+        //We must find the midpoint to understand where to split the input file in half
+        if (lineCount % 2 == 0){
+            midpoint = lineCount / 2;
+        }
+        else {
+            midpoint = (lineCount + 1) / 2;
+        }
+        
+        //Creating threads
+        grep multThredGrepObj1 = null;
+        grep multThredGrepObj2 = null;
+        Thread thread1 = null;
+        Thread thread2 = null;
+        
+        multThredGrepObj1 = new grep(0, midpoint, p, fileName);
+        thread1 = new Thread(multThredGrepObj1);
+        //Starting thread 1 first
+        thread1.start();
+        System.out.println("Thread 1: ");
+
+        try {
+            thread1.join(0);
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        
+        
+        multThredGrepObj2 = new grep(midpoint, (lineCount), p, fileName);
+        thread2 = new Thread(multThredGrepObj2);
+        
+        //Starting thread 2 afterwards
+        System.out.println("Thread 2: ");
+        thread2.start();
+
+        try {
+            thread2.join(0);
+        } catch (Exception e){
+            e.printStackTrace();
+        }
+        
+    }
+    
+    
+    //Driver
+    public static void main(String[] args) {
+        DecimalFormat df = new DecimalFormat("0.000E0");
+        
+        //Error Checking
+        if (args.length < 2) {
+            System.out.println("Error: Must enter 2+ arguments");
+            System.exit(1);
+        }
+        
+        System.out.println("GREP WITHOUT MULTITHREADING: ");
+        
+        double startTime1 = System.nanoTime();
+        grepMethod(args);
+        double endTime1 = System.nanoTime();
+        
+        System.out.println("Execution time: " + df.format(((endTime1 - startTime1)/1000000000)) + " seconds\n");
+        
+        System.out.println("GREP WITH MULTITHREADING: ");
+        
+        double startTime2 = System.nanoTime();
+        multThredGrep(args);
+        double endTime2 = System.nanoTime();
+        
+        System.out.println("Execution time: " + df.format(((endTime2 - startTime2) / 1000000000)) + " seconds\n");
+        
+        System.exit(0);
+    }
+}
+
